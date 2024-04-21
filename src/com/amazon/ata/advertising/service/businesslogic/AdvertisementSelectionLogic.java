@@ -66,21 +66,31 @@ public class AdvertisementSelectionLogic {
         } else {
             TargetingEvaluator targetingEvaluator = new TargetingEvaluator(new RequestContext(customerId, marketplaceId));
 
-            final List<AdvertisementContent> contents = contentDao.get(marketplaceId).stream()
-                  .filter(content -> targetingGroupDao.get(content.getContentId()).stream()
-                          .sorted(Comparator.comparingDouble(TargetingGroup::getClickThroughRate))
-                          .map(targetingEvaluator::evaluate)
-                          // .peek(evaluation -> System.out.println(content.getContentId() + ": " + evaluation.isTrue()))
-                          .anyMatch(TargetingPredicateResult::isTrue))
-                  .collect(Collectors.toCollection(ArrayList::new));
+            final TreeMap<Double, AdvertisementContent> sortedAds = new TreeMap<>(Comparator.reverseOrder());
 
-            if (CollectionUtils.isNotEmpty(contents)) {
-                AdvertisementContent randomAdvertisementContent = contents.get(random.nextInt(contents.size()));
-                generatedAdvertisement = new GeneratedAdvertisement(randomAdvertisementContent);
+            contentDao.get(marketplaceId)
+                    .forEach(content -> targetingGroupDao.get(content.getContentId()).stream()
+                            .filter(targetingGroup -> targetingEvaluator.evaluate(targetingGroup).isTrue())
+                            .map(TargetingGroup::getClickThroughRate)
+                            .max(Double::compareTo)
+                            .ifPresent(ctr -> sortedAds.put(ctr,content)));
+
+            if (!sortedAds.isEmpty()) {
+                generatedAdvertisement = new GeneratedAdvertisement(sortedAds.firstEntry().getValue());
             }
 
+//            final List<AdvertisementContent> contents = contentDao.get(marketplaceId).stream()
+//                  .filter(content -> targetingGroupDao.get(content.getContentId()).stream()
+//                          .map(targetingEvaluator::evaluate)
+//                          // .peek(evaluation -> System.out.println(content.getContentId() + ": " + evaluation.isTrue()))
+//                          .anyMatch(TargetingPredicateResult::isTrue))
+//                  .collect(Collectors.toCollection(ArrayList::new));
+//
+//            if (CollectionUtils.isNotEmpty(contents)) {
+//                 AdvertisementContent randomAdvertisementContent = contents.get(random.nextInt(contents.size()));
+//                 generatedAdvertisement = new GeneratedAdvertisement(randomAdvertisementContent);
+//            }
         }
-
         return generatedAdvertisement;
     }
 }
@@ -105,19 +115,10 @@ public class AdvertisementSelectionLogic {
 //  back burner for now
 //  final List<AdvertisementContent> contents = contentDao.get(marketplaceId).stream()
 //        .filter(content -> targetingGroupDao.get(content.getContentId()).stream()
-//                .sorted(Comparator.comparingDouble(TargetingGroup::getClickThroughRate))
 //                .map(targetingEvaluator::evaluate)
 //                .anyMatch(TargetingPredicateResult::isTrue))
 //        .collect(Collectors.toCollection(ArrayList::new));
 
-//
 
-//    final List<AdvertisementContent> contents = contentDao.get(marketplaceId).stream()
-//            .filter(content -> targetingGroupDao.get(content.getContentId()).stream()
-//                    .sorted(Comparator.comparingDouble(TargetingGroup::getClickThroughRate))
-//                    .map(targetingEvaluator::evaluate)
-//                    .filter(TargetingPredicateResult::isTrue)
-//                    .findFirst()
-//                    .orElse(TargetingPredicateResult.FALSE)
-//                    .isTrue())
-//            .collect(Collectors.toList());
+
+
