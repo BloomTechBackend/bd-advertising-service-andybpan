@@ -4,14 +4,17 @@ import com.amazon.ata.advertising.service.model.RequestContext;
 import com.amazon.ata.advertising.service.targeting.predicate.TargetingPredicate;
 import com.amazon.ata.advertising.service.targeting.predicate.TargetingPredicateResult;
 
-import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Evaluates TargetingPredicates for a given RequestContext.
  */
 public class TargetingEvaluator {
     public static final boolean IMPLEMENTED_STREAMS = true;
-    public static final boolean IMPLEMENTED_CONCURRENCY = false;
+    public static final boolean IMPLEMENTED_CONCURRENCY = true;
     private final RequestContext requestContext;
 
     /**
@@ -33,12 +36,33 @@ public class TargetingEvaluator {
         // evaluate based on context
         // checks if all the values are true to return true
         // otherwise return false
-        return targetingGroup.getTargetingPredicates().stream()
-                .map(predicate -> predicate.evaluate(requestContext))
+
+        ExecutorService executor = Executors.newCachedThreadPool();
+        TargetingPredicateResult result = targetingGroup.getTargetingPredicates().stream()
+                .map(predicate -> executor.submit(() -> predicate.evaluate(requestContext)))
+                .map(resultFuture -> {
+                    try {
+                        return resultFuture.get();
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException("predicate Result failed to get", e);
+                    }
+                })
                 .allMatch(TargetingPredicateResult::isTrue)
                 ? TargetingPredicateResult.TRUE :
-                  TargetingPredicateResult.FALSE;
+                TargetingPredicateResult.FALSE;
+        executor.shutdown();
+        return result;
 
+        // Sprint 25 Version
+//        TargetingPredicateResult result = targetingGroup.getTargetingPredicates().stream()
+//                .map(predicate -> predicate.evaluate(requestContext))
+//                .allMatch(TargetingPredicateResult::isTrue)
+//                ? TargetingPredicateResult.TRUE :
+//                TargetingPredicateResult.FALSE;
+//        return result;
+
+
+        // Original implementation
 //        List<TargetingPredicate> targetingPredicates = targetingGroup.getTargetingPredicates();
 //        boolean allTruePredicates = true;
 //        for (TargetingPredicate predicate : targetingPredicates) {
